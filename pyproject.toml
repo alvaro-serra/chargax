@@ -7,7 +7,7 @@ authors = [
     { name = "Koen Ponse", email = "k.ponse@liacs.leidenuniv.nl" }
 ]
 requires-python = ">=3.10"
-dependencies = ['jymkit[algs]>=0.0.9', 'jax[cuda]==0.5.2']
+dependencies = ['jymkit[algs]>=0.0.10']
 
 [build-system]
 requires = ["hatchling"]
