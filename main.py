@@ -1,8 +1,8 @@
 import jax
-import jymkit as jym
+import jaxnasium as jym
 import numpy as np
 import optax
-from jymkit.algorithms import PPO
+from jaxnasium.algorithms import PPO
 
 from chargax import Chargax, get_electricity_prices  # noqa: E402
 
