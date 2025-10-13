@@ -2,6 +2,10 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 
+> [!NOTE]
+> Please refer to the submission branch to reproduce results as presented in the paper.
+> The main branch ships the bare environment.
+
 ---
 
 ## 📦 Installation
@@ -29,6 +33,11 @@ python main.py
 for CUDA support, additionally run `pip install jax[cuda]`.
 
 ---
+
+> [!NOTE]
+> The PPO implementation used in the example `train.py` file is different from the one
+> used in the paper. As such, required hyperparameters may be different as well.
+> Check out the submission branch to reproduce results.
 
 ## 📑 Citing
 
