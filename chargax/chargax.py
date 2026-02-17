@@ -1,6 +1,6 @@
 import datetime
 from dataclasses import asdict, replace
-from typing import Dict, Literal, Tuple
+from typing import Callable, Dict, Literal, Tuple
 
 import equinox as eqx
 import jax
@@ -11,6 +11,7 @@ from jaxnasium import TimeStep
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from ._data_loaders import get_car_data, get_scenario
+from ._default_data_loaders import default_get_num_cars_arriving_constructor
 from ._station_layout import EVSE, ChargingStation, StationBattery
 
 
@@ -47,6 +48,12 @@ class Chargax(jym.Environment):
     elec_grid_sell_price: jnp.ndarray = eqx.field(converter=jnp.asarray)  # €/kWh
     elec_customer_sell_price: float = 0.75  # €/kWh
 
+    get_num_cars_arriving: Callable[[PRNGKeyArray, EnvState], int] = None
+    # get_new_cars_arriving: Callable[[PRNGKeyArray, EnvState], EVSE] = None
+    # get_grid_buy_price: Callable[[EnvState], float] = None
+    # get_grid_sell_price: Callable[[EnvState], float] = None
+    # get_customer_sell_price: Callable[[EnvState], float] = None
+
     # Data:
     ev_arrival_means_workdays: jnp.ndarray = None
     ev_arrival_means_non_workdays: jnp.ndarray = None
@@ -78,52 +85,21 @@ class Chargax(jym.Environment):
     )
     minutes_per_timestep: int = 5
     renormalize_currents: bool = True
-    include_battery: bool = True
+    # include_battery: bool = True
     allow_discharging: bool = True
 
     full_info_dict: bool = False
 
     @property
     def max_episode_steps(self) -> int:
-        return len(self.ev_arrival_means_workdays[0])
+        return int(24 * 60 / self.minutes_per_timestep)  # Simulate one day
 
     def __post_init__(self):
-        def pre_sample_data(data: np.ndarray, num_samples=10000) -> jnp.ndarray:
-            data = np.asarray(data)
-            data = np.random.poisson(data, (num_samples, len(data)))
-            return jnp.array(data)
-
-        if self.arrival_frequency in ["low", "medium", "high"]:
-            if self.arrival_frequency == "low":
-                arrival_frequency = 50
-            elif self.arrival_frequency == "medium":
-                arrival_frequency = 100
-            elif self.arrival_frequency == "high":
-                arrival_frequency = 250
-        else:
-            arrival_frequency = self.arrival_frequency
-
-        arrival_data_workdays, arrival_data_weekends, _, _ = get_scenario(
-            self.user_profiles,
-            average_cars_per_day=arrival_frequency,
-            minutes_per_timestep=self.minutes_per_timestep,
-        )
-        self.__setattr__(
-            "ev_arrival_means_workdays",
-            pre_sample_data(arrival_data_workdays, num_samples=(10000 // 7) * 5),
-        )
-        self.__setattr__(
-            "ev_arrival_means_non_workdays",
-            pre_sample_data(arrival_data_weekends, num_samples=(10000 // 7) * 2),
-        )
-
-        # if self.station is None:
-        #     station = ChargingStation(
-        #         num_chargers=self.num_chargers,
-        #         num_chargers_per_group=self.num_chargers_per_group,
-        #         num_dc_groups=self.num_dc_groups,
-        #     )
-        #     self.__setattr__("station", station)
+        if self.get_num_cars_arriving is None:
+            self.__setattr__(
+                "get_num_cars_arriving",
+                default_get_num_cars_arriving_constructor(self, "medium", "shopping"),
+            )
 
     def reset_env(self, key: PRNGKeyArray) -> Tuple[Dict[str, Array], EnvState]:
 
@@ -155,13 +131,15 @@ class Chargax(jym.Environment):
 
         # Set all chargers with no car connected to 0:
         charging_ports = jax.tree.map(
-            lambda itm: itm * charging_ports.charger_is_car_connected, charging_ports
+            lambda p: p * charging_ports.charger_is_car_connected, charging_ports
         )
 
+        updated_grid = new_state.grid.update_evses_from_flat(
+            charging_ports
+        ).update_batteries_from_flat(batteries)
+
         new_state = new_state._replace(
-            grid=new_state.grid.update_batteries_from_flat(
-                batteries
-            ).update_evses_from_flat(charging_ports),
+            grid=updated_grid,
             timestep=old_state.timestep + 1,
         )
 
@@ -382,14 +360,7 @@ class Chargax(jym.Environment):
     ) -> tuple[EnvState, EVSE]:
         key1, key2 = jax.random.split(key)
 
-        # poission dists are pre-sampled -- but each is independent, so we can just
-        # draw any of the presampled batches at each timestep
-        i = jax.random.randint(key1, (), 0, self.ev_arrival_means_workdays.shape[0])
-        new_cars_amount = jax.lax.select(
-            state.is_workday,
-            self.ev_arrival_means_workdays[i][state.timestep],
-            self.ev_arrival_means_non_workdays[i][state.timestep],
-        )
+        new_cars_amount = self.get_num_cars_arriving(key1, state)
 
         # Generate new chargers and put the car_connected to False when:
         # 1. The index of the charger is already connected to a car
