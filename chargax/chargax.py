@@ -77,7 +77,7 @@ class Chargax(jym.Environment):
     charged_satisfaction_alpha: float = 0.0
     time_satisfaction_alpha: float = 0.0
     rejected_customers_alpha: float = 0.0
-    battery_degredation_alpha: float = 0.0
+    battery_degradation_alpha: float = 0.0
     beta: float = 0.0
 
     # Env options:
@@ -432,7 +432,7 @@ class Chargax(jym.Environment):
             * (charged_overtime_delta - (self.beta * charged_undertime_delta))
             + self.rejected_customers_alpha * rejected_customers_delta
             + self.capacity_exceeded_alpha * exceeded_capacity_delta
-            + self.battery_degredation_alpha * battery_degredation_delta
+            + self.battery_degradation_alpha * battery_degredation_delta
         )
 
     def get_terminated(self, state: EnvState) -> bool:
