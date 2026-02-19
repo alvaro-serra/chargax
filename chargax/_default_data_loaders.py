@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass, field
 from importlib import resources as r
 from typing import TYPE_CHECKING, Callable, Literal
 
@@ -21,7 +20,6 @@ def _average_data(data, length):
     Average over data to a desired length
     i.e. array([0, 5, 10]) -> array([0, 2.5, 2.5, 5, 5]) if length = 5
     """
-    # x = np.array(data)
     x = np.array(data)
     old_length = len(x)
     x = np.repeat(x, length // x.shape[0]).reshape(old_length, -1)
@@ -92,6 +90,8 @@ def _load_car_profiles(dataset: Literal["eu", "us", "world"]):
         frequency = data[:, 1]
     elif dataset == "world":
         frequency = data[:, 2]
+    else:
+        raise ValueError(f"Invalid dataset: {dataset}")
 
     # make sure frequency is normalized to 1.0
     frequency /= np.sum(frequency)
@@ -227,7 +227,7 @@ def build_default_scenario(
 
 
 def build_default_grid_price_fn(
-    env: Chargax, dataset: str = "2023_NL", offset: int = 0
+    env: Chargax, dataset: str = "2023_NL", offset: float = 0
 ) -> Callable[[EnvState], float]:
     """Default function to get the electricity prices based on the dataset"""
 
