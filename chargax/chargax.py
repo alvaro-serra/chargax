@@ -47,33 +47,66 @@ class EnvState(jym.EnvState):
 
 class Chargax(jym.Environment):
     station: ChargingStation
+    """The charging station layout defining EVSEs, batteries, and power limits."""
+
     elec_customer_sell_price: float = 0.75  # €/kWh
+    """Price in €/kWh charged to customers for electricity delivered."""
 
     get_cars_leaving: Callable[[PRNGKeyArray, EVSE], Array] = build_leave_cars_fn()
+    """Callable that determines which cars leave at each timestep given RNG and EVSE state."""
+
     get_num_cars_arriving: Callable[[PRNGKeyArray, EnvState], int] = None
+    """Callable that returns the number of new cars arriving given RNG and environment state."""
+
     get_new_cars_arriving: Callable[[PRNGKeyArray, EnvState], EVSE] = None
+    """Callable that generates EVSE entries for newly arriving cars given RNG and environment state."""
+
     get_grid_buy_price: Callable[[EnvState], float] = None
+    """Callable that returns the grid electricity buy price in €/kWh for the current state."""
+
     get_grid_sell_price: Callable[[EnvState], float] = None
+    """Callable that returns the grid electricity sell price in €/kWh for the current state."""
 
     # reward alpha values
     capacity_exceeded_alpha: float = 0.0
+    """Reward penalty weight for exceeding the station's grid capacity limit."""
+
     charged_satisfaction_alpha: float = 0.0
+    """Reward penalty weight for unmet customer charging demand (uncharged kWh)."""
+
     time_satisfaction_alpha: float = 0.0
+    """Reward penalty weight for overtime/undertime relative to customer departure."""
+
     rejected_customers_alpha: float = 0.0
+    """Reward penalty weight for each customer rejected due to no available charger."""
+
     battery_degradation_alpha: float = 0.0
+    """Reward penalty weight for battery degradation, proxied by total discharged kWh."""
+
     beta: float = 0.0
+    """Discount factor applied to early-departure (undertime) within the time satisfaction penalty."""
 
     # Env options:
-    num_discretization_levels: int = (
-        10  # 10 would mean each charger can charge 10%, 20%, ... of its max rate
-    )
+    num_discretization_levels: int = 10
+    """Number of discrete action levels per charger (e.g. 10 means 10%, 20%, … of max rate)."""
+
     minutes_per_timestep: int = 5
+    """Duration of each simulation timestep in minutes."""
+
     renormalize_currents: bool = True
+    """Whether to redistribute currents across chargers to respect shared capacity constraints."""
+
     allow_discharging: bool = True
+    """Whether vehicle-to-grid discharging (negative current) is permitted."""
+
     price_hour_lookahead: int = 6
+    """Number of future hours of electricity prices included in the observation."""
 
     full_info_dict: bool = False
+    """Whether to return a full detailed info dict or a compact logging-only version."""
+
     default_data_kwargs: Dict = eqx.field(static=True, default_factory=lambda: {})
+    """Keyword arguments passed to default data loaders for car/price scenario configuration."""
 
     @property
     def max_episode_steps(self) -> int:
