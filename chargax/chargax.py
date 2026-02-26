@@ -167,7 +167,7 @@ class Chargax(jym.Environment):
         charging_ports = new_state.grid.evses_flat
         batteries = new_state.grid.batteries_flat
 
-        new_state, charging_ports = self.charge_cars(
+        new_state, charging_ports, batteries = self.charge_cars_and_update_batteries(
             new_state, charging_ports, batteries
         )
         new_state, charging_ports = self.update_time_and_clear_cars(
@@ -223,18 +223,15 @@ class Chargax(jym.Environment):
             return evse.replace(charger_current_now=current)
 
         def _battery_action(battery: StationBattery, action: Array) -> StationBattery:
-            # For the battery, directly set the output power and update the battery level
             action = action - 1
             desired_output_kw = action * battery.max_kw_throughput
             desired_output_kw_now = self.kw_to_kw_this_timestep(desired_output_kw)
-            new_battery_level = jnp.clip(
+            new_desired_battery_level = jnp.clip(
                 battery.battery_now + desired_output_kw_now, 0, battery.capacity_kw
             )
-            battery_change = new_battery_level - battery.battery_now
+            battery_change = new_desired_battery_level - battery.battery_now
             actual_output_kw = battery_change * (60 / self.minutes_per_timestep)
-            return battery.replace(
-                battery_now=new_battery_level, output_now_kw=actual_output_kw
-            )
+            return battery.replace(output_now_kw=actual_output_kw)
 
         actions = jax.tree.map(lambda x: x / self.num_discretization_levels, actions)
 
@@ -267,10 +264,11 @@ class Chargax(jym.Environment):
             exceeded_capacity=state.exceeded_capacity + exceeded_capacity,
         )
 
-    def charge_cars(
+    def charge_cars_and_update_batteries(
         self, state: EnvState, charging_ports: EVSE, batteries: StationBattery
     ) -> tuple[EnvState, EVSE]:
 
+        # (dis)charge cars:
         charging_now = self.kw_to_kw_this_timestep(charging_ports.power_output)
         previous_battery = charging_ports.car_battery_now_kw
         new_battery = (previous_battery + charging_now).clip(
@@ -278,6 +276,13 @@ class Chargax(jym.Environment):
             charging_ports.car_battery_capacity_kw,
         )
         real_charged_this_timestep = new_battery - previous_battery
+
+        # (dis)charge station batteries:
+        batteries_output_now_kw = self.kw_to_kw_this_timestep(batteries.output_now_kw)
+        new_station_battery_level = jnp.clip(
+            batteries.battery_now + batteries_output_now_kw, 0, batteries.capacity_kw
+        )
+        batteries = batteries.replace(battery_now=new_station_battery_level)
 
         # Calculate customer revenue (EVSEs only)
         energy_sold = jnp.maximum(
@@ -315,12 +320,15 @@ class Chargax(jym.Environment):
         total_charged = jnp.maximum(real_charged_this_timestep, 0.0).sum()
         total_discharged = jnp.maximum(-real_charged_this_timestep, 0.0).sum()
 
-        return replace(
-            state,
-            profit=profit,
-            total_charged_kw=total_charged,
-            total_discharged_kw=total_discharged,
-        ), charging_ports
+        return (
+            state.replace(
+                profit=profit,
+                total_charged_kw=total_charged + state.total_charged_kw,
+                total_discharged_kw=total_discharged + state.total_discharged_kw,
+            ),
+            charging_ports,
+            batteries,
+        )
 
     def update_time_and_clear_cars(
         self, key: PRNGKeyArray, state: EnvState, ports: EVSE
