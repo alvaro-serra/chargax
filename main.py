@@ -1,9 +1,11 @@
 import jax
+import jax.numpy as jnp
 import jaxnasium as jym
 import numpy as np
 from jaxnasium.algorithms import DQN, PPO, SAC
+from jaxtyping import Array, PRNGKeyArray
 
-from chargax import Chargax, ChargingStation
+from chargax import EVSE, Chargax, ChargingStation
 from chargax.baselines import MaxCharge, Random
 
 if __name__ == "__main__":
@@ -17,7 +19,7 @@ if __name__ == "__main__":
     env = jym.LogWrapper(env)
 
     # RL Training with PPO
-    total_timesteps = 1_000_000
+    total_timesteps = 500_000
     agent = PPO(  # Not optimized, just a simple example
         num_steps=300,
         num_envs=8,

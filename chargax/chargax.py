@@ -258,8 +258,7 @@ class Chargax(jym.Environment):
         else:
             exceeded_capacity = 0.0
 
-        return replace(
-            state,
+        return state._replace(
             grid=updated_grid,
             exceeded_capacity=state.exceeded_capacity + exceeded_capacity,
         )
@@ -517,10 +516,12 @@ class Chargax(jym.Environment):
         """
         Define the action space of the environment.
         """
-        num_actions_per_charger = self.num_discretization_levels + 1
+        num_actions_per_charger = self.num_discretization_levels
         if self.allow_discharging:
             num_actions_per_charger *= 2
-        num_actions_per_battery = (self.num_discretization_levels + 1) * 2
+        num_actions_per_battery = self.num_discretization_levels * 2
+        num_actions_per_charger += 1  # idle action
+        num_actions_per_battery += 1  # idle action
 
         actions = {
             "evses": jax.tree.map(
