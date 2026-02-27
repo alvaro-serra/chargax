@@ -300,11 +300,10 @@ class Chargax(jym.Environment):
             real_charged_this_timestep / charging_ports.cumulative_efficiency,
             real_charged_this_timestep * charging_ports.cumulative_efficiency,
         )
-        batteries_output_now_kw = self.kw_to_kw_this_timestep(batteries.output_now_kw)
         grid_draw_batteries = jnp.where(
             batteries_output_now_kw >= 0,
-            -batteries_output_now_kw * batteries.cumulative_efficiency,
-            -batteries_output_now_kw / batteries.cumulative_efficiency,
+            batteries_output_now_kw / batteries.cumulative_efficiency,  # charging
+            batteries_output_now_kw * batteries.cumulative_efficiency,  # discharging
         )
         total_grid_draw = grid_draw_evses.sum() + grid_draw_batteries.sum()
         elec_price = jax.lax.select(
@@ -321,7 +320,7 @@ class Chargax(jym.Environment):
         total_discharged = jnp.maximum(-real_charged_this_timestep, 0.0).sum()
 
         return (
-            state.replace(
+            state._replace(
                 profit=profit,
                 total_charged_kw=total_charged + state.total_charged_kw,
                 total_discharged_kw=total_discharged + state.total_discharged_kw,
@@ -513,10 +512,10 @@ class Chargax(jym.Environment):
         """
         Define the action space of the environment.
         """
-        num_actions_per_charger = self.num_discretization_levels
+        num_actions_per_charger = self.num_discretization_levels + 1
         if self.allow_discharging:
             num_actions_per_charger *= 2
-        num_actions_per_battery = self.num_discretization_levels * 2
+        num_actions_per_battery = (self.num_discretization_levels + 1) * 2
 
         actions = {
             "evses": jax.tree.map(

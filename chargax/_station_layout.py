@@ -36,7 +36,7 @@ class StationBattery(StationNode):
     """
 
     capacity_kw: float = eqx.field(static=True)
-    output_now_kw: float = 0.0  # positive for discharging, negative for charging
+    output_now_kw: float = 0.0  # positive for charging, negative for discharging
     battery_now: float = 0.0
     tau: float = eqx.field(static=True, default=1.0)
     cumulative_efficiency: float = eqx.field(static=True, default=1.0)
@@ -48,19 +48,19 @@ class StationBattery(StationNode):
     @property
     def requested_power(self) -> float:
         """Power drawn from the grid (charging the battery) in kW, always >= 0."""
-        return jnp.maximum(0.0, -self.output_now_kw)
+        return jnp.maximum(0.0, self.output_now_kw)
 
     @property
     def supplied_power(self) -> float:
         """Power supplied back to the grid (discharging the battery) in kW, always >= 0."""
-        return jnp.maximum(0.0, self.output_now_kw)
+        return jnp.maximum(0.0, -self.output_now_kw)
 
     def distribute(self, available_from_top: float):
         total_available = available_from_top + self.supplied_power
         scale_factor = jnp.minimum(1.0, total_available / (self.requested_power + 1e-8))
         # Scale only charging (negative output); leave discharging untouched
         new_output = jnp.where(
-            self.output_now_kw < 0,
+            self.output_now_kw > 0,
             self.output_now_kw * scale_factor,
             self.output_now_kw,
         )
@@ -407,18 +407,20 @@ class ChargingStation(StationSplitter):
 
     @classmethod
     def init_default_station(cls) -> "ChargingStation":
-        """Initializes a station layout with a mix of fast and slow chargers and a battery on site."""
+        """Initializes a station layout with a mix of fast and slow chargers and a battery on site.
+        This site has a constrained grid connection and thus requires the battery to meet demand during peak hours.
+        """
         return cls(
-            max_kw_throughput=300.0,  # Grid connection max throughput
+            max_kw_throughput=150.0,  # Grid connection max throughput
             efficiency=1.0,
             connections=[
                 StationSplitter(
-                    max_kw_throughput=600.0,
+                    max_kw_throughput=650.0,
                     efficiency=0.995,
                     connections=[
                         # Fast charger:
                         StationSplitter(
-                            max_kw_throughput=300.0,
+                            max_kw_throughput=600.0,
                             efficiency=0.995,
                             connections=[
                                 EVSE(
@@ -437,27 +439,21 @@ class ChargingStation(StationSplitter):
                         ),
                         # Slow charger:
                         StationSplitter(
-                            max_kw_throughput=300.0,
+                            max_kw_throughput=50.0,
                             efficiency=0.995,
                             connections=[
                                 EVSE(
                                     voltage=230,
                                     max_current=50,
-                                    num_chargers=4,
+                                    num_chargers=2,
                                     efficiency=0.995,
-                                ),
-                                EVSE(
-                                    voltage=230,
-                                    max_current=50,
-                                    num_chargers=4,
-                                    efficiency=0.995,
-                                ),
+                                )
                             ],
                         ),
                         # Battery on site:
                         StationBattery(
                             capacity_kw=10000.0,
-                            max_kw_throughput=300.0,
+                            max_kw_throughput=500.0,
                             efficiency=0.995,
                         ),
                     ],
