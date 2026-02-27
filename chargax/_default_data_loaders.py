@@ -249,9 +249,6 @@ def build_leave_cars_fn() -> Callable[[PRNGKeyArray, EVSE], Array]:
     """
 
     def _leave_cars(key: PRNGKeyArray, ports: EVSE) -> Array:
-        ports.car_time_till_leave
-        ports.car_time_waited
-
         is_leaving_time_sensitive = ports.car_time_till_leave <= 0
         is_leaving_charge_sensitive = ports.car_battery_desired_remaining <= 0
         is_leaving = (is_leaving_charge_sensitive * ports.charge_sensitive) + (
